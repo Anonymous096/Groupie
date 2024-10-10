@@ -1,10 +1,18 @@
 import {
   onCreateChannelPost,
+  onCreateCommentReply,
+  onCreateNewComment,
   onDeleteChannel,
   onGetChannelInfo,
   onLikeChannelPost,
   onUpdateChannelInfo,
 } from "@/actions/channels"
+import {
+  onGetCommentReplies,
+  onGetPostComments,
+  onGetPostInfo,
+} from "@/actions/groups"
+import { CreateCommentSchema } from "@/components/global/post-comments/schema"
 import { CreateChannelPost } from "@/components/global/post-content/schema"
 import { zodResolver } from "@hookform/resolvers/zod"
 import {
@@ -250,4 +258,112 @@ export const useLikeChannelPost = (postid: string) => {
   })
 
   return { mutate, isPending }
+}
+
+export const useGetPost = (postid: string) => {
+  const { data } = useQuery({
+    queryKey: ["unique-post"],
+    queryFn: () => onGetPostInfo(postid),
+  })
+
+  return { data }
+}
+
+export const usePostComment = (postid: string) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<z.infer<typeof CreateCommentSchema>>({
+    resolver: zodResolver(CreateCommentSchema),
+  })
+
+  const client = useQueryClient()
+
+  const { mutate, variables, isPending } = useMutation({
+    mutationFn: (data: { content: string; commentid: string }) =>
+      onCreateNewComment(postid, data.content, data.commentid),
+    onMutate: () => reset(),
+    onSuccess: (data) =>
+      toast(data?.status === 200 ? "Success" : "Error", {
+        description: data?.message,
+      }),
+    onSettled: async () => {
+      return await client.invalidateQueries({
+        queryKey: ["post-comments"],
+      })
+    },
+  })
+
+  const onCreateComment = handleSubmit(async (values) =>
+    mutate({
+      content: values.comment,
+      commentid: v4(),
+    }),
+  )
+
+  return { register, errors, onCreateComment, variables, isPending }
+}
+
+export const useComments = (postid: string) => {
+  const { data } = useQuery({
+    queryKey: ["post-comments"],
+    queryFn: () => onGetPostComments(postid),
+  })
+
+  return { data }
+}
+
+export const useReply = () => {
+  const [onReply, setOnReply] = useState<{
+    comment?: string
+    reply: boolean
+  }>({ comment: undefined, reply: false })
+
+  const [activeComment, setActiveComment] = useState<string | undefined>(
+    undefined,
+  )
+
+  const onSetReply = (commentid: string) =>
+    setOnReply((prev) => ({ ...prev, comment: commentid, reply: true }))
+
+  const onSetActiveComment = (id: string) => setActiveComment(id)
+
+  return { onReply, onSetReply, onSetActiveComment, activeComment }
+}
+
+export const useGetReplies = (commentid: string) => {
+  const { isFetching, data } = useQuery({
+    queryKey: ["comment-replies", commentid],
+    queryFn: () => onGetCommentReplies(commentid),
+    enabled: Boolean(commentid),
+  })
+
+  return { isFetching, data }
+}
+
+export const usePostReply = (commentid: string, postid: string) => {
+  const { register, reset, handleSubmit } = useForm<
+    z.infer<typeof CreateCommentSchema>
+  >({
+    resolver: zodResolver(CreateCommentSchema),
+  })
+
+  const { mutate, variables, isPending } = useMutation({
+    mutationFn: (data: { comment: string; replyid: string }) =>
+      onCreateCommentReply(postid, commentid, data.comment, data.replyid),
+    onMutate: () => reset(),
+    onSuccess: (data) => {
+      return toast(data?.status === 200 ? "Success" : "Error", {
+        description: data?.message,
+      })
+    },
+  })
+
+  const onCreateReply = handleSubmit(async (values) =>
+    mutate({ comment: values.comment, replyid: v4() }),
+  )
+
+  return { onCreateReply, register, variables, isPending }
 }
