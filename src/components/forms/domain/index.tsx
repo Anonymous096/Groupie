@@ -16,7 +16,6 @@ export const CustomDomainForm = ({ groupid }: CustomDomainFormProps) => {
   const { register, errors, onAddDomain, isPending, data } =
     useCustomDomain(groupid)
 
-
   return (
     <div className="flex flex-col gap-y-5">
       <form className="mt-10 flex gap-x-5 items-end" onSubmit={onAddDomain}>
